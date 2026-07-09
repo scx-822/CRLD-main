@@ -49,22 +49,10 @@ q_i = Softmax(g_i)
 
 ### 3. 动态融合权重
 
-基础版本使用教师强视图预测熵计算动态原型融合权重：
+当前版本使用教师强视图预测熵计算动态原型融合权重：
 
 ```text
 lambda_i = H(p_s^T) / log(C)
-```
-
-当前 `res32x4_res8x4.yaml` 额外加入弱强视图预测差异项：
-
-```text
-lambda_i = H(p_s^T) / log(C) + eta * JS(p_w^T, p_s^T)
-```
-
-其中 `eta` 对应：
-
-```yaml
-PROTO_JS_WEIGHT: 0.5
 ```
 
 最终强视图教师目标分布为：
@@ -73,7 +61,7 @@ PROTO_JS_WEIGHT: 0.5
 p_bar_s^T = (1 - lambda_i) * p_s^T + lambda_i * q_i
 ```
 
-也就是说，强视图越不可靠、弱强预测差异越大，原型先验的修正权重越高。
+也就是说，教师在强视图下越不确定，原型先验的修正权重越高。
 
 ## 主要代码
 
@@ -112,12 +100,11 @@ configs/cifar100/crld_proto/res32x4_res8x4.yaml
 | `PROTO_TEMP` | 0.5 | 原型相似度温度 |
 | `PROTO_MIN_WEIGHT` | 0.0 | 原型融合权重下限 |
 | `PROTO_MAX_WEIGHT` | 1.0 | 原型融合权重上限 |
-| `PROTO_JS_WEIGHT` | 0.5 | 弱强视图 JS 差异权重 |
 
 输出目录：
 
 ```text
-output/cifar100_baselines/crld_proto,res32x4,res8x4,jslambda05
+output/cifar100_baselines/crld_proto,res32x4,res8x4
 ```
 
 ### ResNet56 -> ResNet20
@@ -128,7 +115,7 @@ output/cifar100_baselines/crld_proto,res32x4,res8x4,jslambda05
 configs/cifar100/crld_proto/res56_res20.yaml
 ```
 
-该配置未启用 `PROTO_JS_WEIGHT`，对应基础 CRLD-Proto：
+该配置对应基础 CRLD-Proto：
 
 ```text
 GLVQ 多中心原型 + log-sum-exp + 概率级原型先验融合
@@ -190,7 +177,7 @@ output/{PROJECT}/{TAG}
 例如：
 
 ```text
-output/cifar100_baselines/crld_proto,res32x4,res8x4,jslambda05
+output/cifar100_baselines/crld_proto,res32x4,res8x4
 ```
 
 常见输出：
@@ -243,4 +230,3 @@ booktitle = {ACM MM},
 year = {2024}
 }
 ```
-
