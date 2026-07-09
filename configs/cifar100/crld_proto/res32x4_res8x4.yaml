@@ -1,6 +1,6 @@
 EXPERIMENT:
   NAME: ""
-  TAG: "crld_proto,res32x4,res8x4,jslambda05"
+  TAG: "crld_proto,res32x4,res8x4"
   PROJECT: "cifar100_baselines"
 
 DATASET:
@@ -29,7 +29,6 @@ CRLD:
   PROTO_TEMP: 0.5
   PROTO_MAX_WEIGHT: 1.0
   PROTO_MIN_WEIGHT: 0.0
-  PROTO_JS_WEIGHT: 0.5
   PROTO_TAU_W: 0.80
   
   LOSS:

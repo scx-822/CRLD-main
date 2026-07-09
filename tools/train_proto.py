@@ -295,7 +295,6 @@ class CRLD_Proto(Distiller):
         self.tau_w = getattr(cfg.CRLD, 'TAU_W', 0.9)
         self.proto_max_weight = getattr(cfg.CRLD, 'PROTO_MAX_WEIGHT', 1.0)
         self.proto_min_weight = getattr(cfg.CRLD, 'PROTO_MIN_WEIGHT', 0.0)
-        self.proto_js_weight = getattr(cfg.CRLD, 'PROTO_JS_WEIGHT', 0.0)
 
         self.student.cuda()
         self.teacher.cuda()
@@ -331,18 +330,6 @@ class CRLD_Proto(Distiller):
         log_prob = F.log_softmax(logits_student / self.temperature, dim=1)
         return F.kl_div(log_prob, target_prob, reduction='none').sum(1) * (self.temperature ** 2)
 
-    def _js_divergence(self, probs_a, probs_b):
-        mean_prob = 0.5 * (probs_a + probs_b)
-        kl_a = torch.sum(
-            probs_a * (torch.log(probs_a + 1e-8) - torch.log(mean_prob + 1e-8)),
-            dim=1,
-        )
-        kl_b = torch.sum(
-            probs_b * (torch.log(probs_b + 1e-8) - torch.log(mean_prob + 1e-8)),
-            dim=1,
-        )
-        return 0.5 * (kl_a + kl_b) / math.log(2.0)
-
     def forward_train(self, image, target, epoch=0, **kwargs):
         image_weak, image_strong = image
 
@@ -368,9 +355,6 @@ class CRLD_Proto(Distiller):
 
         # Prototype fusion weight: strong-view uncertainty.
         uncertainty_t_s = entropy_t_s / self.max_entropy
-        if self.proto_js_weight > 0:
-            js_ws = self._js_divergence(probs_t_w, probs_t_s).clamp(0.0, 1.0)
-            uncertainty_t_s = uncertainty_t_s + self.proto_js_weight * js_ws
         lambda_i = (
             self.proto_min_weight
             + uncertainty_t_s.clamp(max=self.proto_max_weight - self.proto_min_weight)
