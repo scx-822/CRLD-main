@@ -1,0 +1,37 @@
+EXPERIMENT:
+  NAME: ""
+  TAG: "crld_proto,res32x4,res8x4,jslambda05"
+  PROJECT: "cifar100_baselines"
+
+DATASET:
+  NUM_WORKERS: 0
+  TEST:
+    BATCH_SIZE: 64
+
+DISTILLER:
+  TYPE: "CRLD_Proto"
+  TEACHER: "resnet32x4"
+  STUDENT: "resnet8x4"
+
+SOLVER:
+  BATCH_SIZE: 64
+  EPOCHS: 240
+  LR: 0.05
+  LR_DECAY_STAGES: [150, 180, 210]
+  LR_DECAY_RATE: 0.1
+  WEIGHT_DECAY: 0.0005
+  TYPE: "SGD"
+  TRAINER: "crld"
+
+CRLD:
+  TEMPERATURE: 4.0
+  TAU_W: 0.8
+  PROTO_TEMP: 0.5
+  PROTO_MAX_WEIGHT: 1.0
+  PROTO_MIN_WEIGHT: 0.0
+  PROTO_JS_WEIGHT: 0.5
+  PROTO_TAU_W: 0.80
+  
+  LOSS:
+    CE_WEIGHT: 1.0
+    KD_WEIGHT: 1.0

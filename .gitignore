@@ -1,0 +1,27 @@
+# Python/cache
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# OS/IDE
+.DS_Store
+.idea/
+.vscode/
+.claude/
+
+# Datasets and pretrained checkpoints
+data/
+download_ckpts/
+*.pth
+*.pt
+*.ckpt
+*.tar
+*.tar.gz
+*.zip
+
+# Training outputs
+output/
+runs/
+train.events/
+events.out.tfevents.*
+
