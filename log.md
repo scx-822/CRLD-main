@@ -7,8 +7,6 @@
 当前磁盘配置对应 `logit_soft_a05_m005`：
 
 ```yaml
-EXPERIMENT:
-  TAG: "crld_proto,res32x4,res8x4,logit_soft_a05_m005"
 
 CRLD:
   TEMPERATURE: 4.0
