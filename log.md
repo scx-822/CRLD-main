@@ -4,23 +4,6 @@
 
 ## 76.80 版改进
 
-当前磁盘配置对应 `logit_soft_a05_m005`：
-
-```yaml
-
-CRLD:
-  TEMPERATURE: 4.0
-  TAU_W: 0.8
-  PROTO_TEMP: 0.5
-  PROTO_MAX_WEIGHT: 1.0
-  PROTO_MIN_WEIGHT: 0.0
-  PROTO_TAU_W: 0.80
-  LOGIT_SWAP: True
-  LOGIT_SWAP_ALPHA: 0.5
-  LOGIT_SWAP_MARGIN: 0.05
-  LOGIT_SWAP_DISABLE_PROTO: True
-```
-
 ### 改进动机
 
 原始 CRLD-Proto 使用强视图教师特征与类别原型计算相似度分布 `p_sim`，再修正强视图教师软标签。如果强增强已经使教师特征偏向错误类别，那么 `p_sim` 也可能把较高概率分配给错误类，继续融合会放大错误。因此，76.80 版不再根据强视图特征生成的原型分布修正软标签，而是直接对教师强视图 logits 做最小幅度的标签感知校正。
