@@ -295,6 +295,15 @@ class CRLD_Proto(Distiller):
         self.tau_w = getattr(cfg.CRLD, 'TAU_W', 0.9)
         self.proto_max_weight = getattr(cfg.CRLD, 'PROTO_MAX_WEIGHT', 1.0)
         self.proto_min_weight = getattr(cfg.CRLD, 'PROTO_MIN_WEIGHT', 0.0)
+        self.proto_label_adjust = getattr(cfg.CRLD, 'PROTO_LABEL_ADJUST', False)
+        self.proto_label_margin = getattr(cfg.CRLD, 'PROTO_LABEL_MARGIN', 0.0)
+        self.proto_wrong_suppress = getattr(cfg.CRLD, 'PROTO_WRONG_SUPPRESS', 1.0)
+        self.proto_true_boost = getattr(cfg.CRLD, 'PROTO_TRUE_BOOST', 1.0)
+        self.proto_reliable_use_psim = getattr(cfg.CRLD, 'PROTO_RELIABLE_USE_PSIM', True)
+        self.logit_swap = getattr(cfg.CRLD, 'LOGIT_SWAP', False)
+        self.logit_swap_alpha = getattr(cfg.CRLD, 'LOGIT_SWAP_ALPHA', 1.0)
+        self.logit_swap_margin = getattr(cfg.CRLD, 'LOGIT_SWAP_MARGIN', 0.0)
+        self.logit_swap_disable_proto = getattr(cfg.CRLD, 'LOGIT_SWAP_DISABLE_PROTO', True)
 
         self.student.cuda()
         self.teacher.cuda()
@@ -329,6 +338,56 @@ class CRLD_Proto(Distiller):
     def _soft_target_kd(self, logits_student, target_prob):
         log_prob = F.log_softmax(logits_student / self.temperature, dim=1)
         return F.kl_div(log_prob, target_prob, reduction='none').sum(1) * (self.temperature ** 2)
+
+    def _label_adjust_proto_logits(self, proto_logits, target):
+        """Use labels to suppress wrong prototype attractions before softmax."""
+        if not self.proto_label_adjust:
+            reliable = torch.ones(
+                proto_logits.size(0), 1, dtype=torch.bool, device=proto_logits.device
+            )
+            return proto_logits, reliable
+
+        target = target.to(proto_logits.device)
+        target_index = target.view(-1, 1)
+        true_logits = proto_logits.gather(1, target_index)
+
+        target_mask = torch.zeros_like(proto_logits, dtype=torch.bool)
+        target_mask.scatter_(1, target_index, True)
+
+        excess = (proto_logits - true_logits + self.proto_label_margin).clamp_min(0.0)
+        excess = excess.masked_fill(target_mask, 0.0)
+        max_excess = excess.max(dim=1, keepdim=True).values
+
+        adjusted_logits = proto_logits - self.proto_wrong_suppress * excess
+        adjusted_logits = adjusted_logits.scatter_add(
+            1, target_index, self.proto_true_boost * max_excess
+        )
+
+        reliable = max_excess.le(1e-12)
+        return adjusted_logits, reliable
+
+    def _swap_teacher_logits(self, logits, target):
+        """Swap/shift true and strongest wrong logits when strong-view teacher is wrong."""
+        if not self.logit_swap:
+            return logits
+
+        target = target.to(logits.device)
+        target_index = target.view(-1, 1)
+        true_logits = logits.gather(1, target_index)
+
+        target_mask = torch.zeros_like(logits, dtype=torch.bool)
+        target_mask.scatter_(1, target_index, True)
+        wrong_logits = logits.masked_fill(target_mask, float('-inf'))
+        wrong_index = wrong_logits.argmax(dim=1, keepdim=True)
+        strongest_wrong = logits.gather(1, wrong_index)
+
+        gap = (strongest_wrong - true_logits + self.logit_swap_margin).clamp_min(0.0)
+        delta = self.logit_swap_alpha * gap
+
+        adjusted_logits = logits.clone()
+        adjusted_logits = adjusted_logits.scatter_add(1, target_index, delta)
+        adjusted_logits = adjusted_logits.scatter_add(1, wrong_index, -delta)
+        return adjusted_logits
 
     def forward_train(self, image, target, epoch=0, **kwargs):
         image_weak, image_strong = image
@@ -370,14 +429,22 @@ class CRLD_Proto(Distiller):
         logits_s_w, logits_s_s = logits_s_all.chunk(2)
 
         with torch.no_grad():
-            proto_logits_s = self._prototype_logits(f_s_t)
-            prob_t_s_soft = F.softmax(logits_t_s.detach() / self.temperature, dim=1)
+            logits_t_s_target = self._swap_teacher_logits(logits_t_s.detach(), target)
+            prob_t_s_soft = F.softmax(logits_t_s_target / self.temperature, dim=1)
             prob_t_w_soft = F.softmax(logits_t_w.detach() / self.temperature, dim=1)
-            prob_sim = F.softmax(proto_logits_s, dim=1)
-            prob_t_s_prior = (
-                (1.0 - lambda_i) * prob_t_s_soft
-                + lambda_i * prob_sim
-            ).detach()
+            if self.logit_swap and self.logit_swap_disable_proto:
+                prob_t_s_prior = prob_t_s_soft.detach()
+            else:
+                proto_logits_s = self._prototype_logits(f_s_t)
+                proto_logits_s, proto_reliable = self._label_adjust_proto_logits(proto_logits_s, target)
+                prob_sim = F.softmax(proto_logits_s, dim=1)
+                lambda_eff = lambda_i
+                if self.proto_label_adjust and not self.proto_reliable_use_psim:
+                    lambda_eff = lambda_i * (~proto_reliable).float()
+                prob_t_s_prior = (
+                    (1.0 - lambda_eff) * prob_t_s_soft
+                    + lambda_eff * prob_sim
+                ).detach()
 
         loss_ce = self.ce_loss_weight * (
             F.cross_entropy(logits_s_w, target) + F.cross_entropy(logits_s_s, target)
