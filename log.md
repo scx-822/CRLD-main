@@ -91,9 +91,9 @@ $$
 同时有：
 
 $$
-\bar z_{s,i,y_i}^{T}
+\bar{z}_{s,i,y_i}^{T}
 +
-\bar z_{s,i,c_i^-}^{T}
+\bar{z}_{s,i,c_i^{-}}^{T}
 =
 z_{s,i,y_i}^{T}
 +
@@ -134,7 +134,7 @@ $$
 T^{2}
 \operatorname{KL}
 \left(
-\bar p_{s,i}^{T}
+\bar{p}_{s,i}^{T}
 \;\|\;
 \operatorname{Softmax}
 \left(
